@@ -1,0 +1,4 @@
+flask
+gradio_client 
+requests 
+pillow
