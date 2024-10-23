@@ -112,4 +112,4 @@ def perform_recomm():
 
 # Start the Flask server
 if __name__ == '__main__':
-    app.run(port=3009, debug=True)
+    app.run(host="0.0.0.0", port=3009, debug=True)
