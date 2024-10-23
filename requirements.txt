@@ -2,3 +2,4 @@ flask
 gradio_client 
 requests 
 pillow
+flask_cors
