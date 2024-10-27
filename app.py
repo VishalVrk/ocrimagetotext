@@ -128,7 +128,7 @@ def perform_recomm():
                     }
         }
 
-        
+
         # Extract nutritional information from the bot's response
         for line in clean_output.splitlines():
             if "Calories" in line:
@@ -159,6 +159,10 @@ def perform_recomm():
     except Exception as e:
         # Handle exceptions and return an error message
         return jsonify({"error": "Failed to perform recommendation", "details": str(e)}), 500
+    
+@app.route('/', methods=['GET'])
+def hello():
+    return "Hello"
 
 # Start the Flask server
 if __name__ == '__main__':
