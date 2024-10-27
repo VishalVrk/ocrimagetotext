@@ -8,7 +8,7 @@ from flask_cors import CORS  # Import CORS
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# Initialize the Gradio client
+# Initialize the Gradio clients
 ocr_client = Client("vrkforever/OCR-image-to-text")
 bot_client = Client("chuanli11/Chat-Llama-3.2-3B-Instruct-uncensored")
 
@@ -35,7 +35,6 @@ def perform_ocr():
         img.save("temp_image.png")  # Save to a temp file for handle_file
 
         # Perform OCR using the Gradio client
-      # Get the OCR result
         result = ocr_client.predict(
             Method="PaddleOCR",
             img=handle_file("temp_image.png"),  # Provide temp image to handle_file
@@ -75,7 +74,7 @@ def perform_recomm():
     if not patient_data or not ingredients:
         return jsonify({"error": "Missing patient data or ingredients"}), 400
 
-    # Prepare the prompt for the recommendation
+    # Prepare the prompt for the recommendation with detailed nutrition information
     prompt = f"""
     Patient Information:
     - Age: {patient_data.get('age')}
@@ -87,7 +86,14 @@ def perform_recomm():
     Ingredients:
     {ingredients}
 
-    Based on this information, provide a recommendation if this food is safe for the patient to consume, and explain the reasons.
+    Based on the provided ingredients, provide a nutritional breakdown including:
+    - Total Calories
+    - Percentage of Protein, Carbohydrates, and Fat
+    - Total Fat in grams and percentage of daily value
+    - Saturated Fat in grams and percentage of daily value
+    - Trans Fat in grams
+
+    Afterward, provide a recommendation on whether this food is safe for the patient to consume, considering their health profile.
     """
 
     try:
@@ -100,11 +106,44 @@ def perform_recomm():
             api_name="/chat"
         )
 
-        # Clean the bot output
+        # Clean and parse the bot output for structured nutrition data
         clean_output = bot_result.replace("assistant", "").strip()
 
-        # Return the recommendation to the frontend
-        return jsonify({"recommendation": clean_output})
+        # Initialize nutrition data structure
+        nutrition_data = {
+            "calories": None,
+            "protein": None,
+            "carbs": None,
+            "fat": None,
+            "detailed_nutrition": {
+                "total_fat": None,
+                "saturated_fat": None,
+                "trans_fat": None
+            }
+        }
+
+        # Extract nutritional information from the bot's response
+        for line in clean_output.splitlines():
+            if "Calories" in line:
+                nutrition_data["calories"] = line.split(":")[1].strip()
+            elif "Protein" in line:
+                nutrition_data["protein"] = line.split(":")[1].strip()
+            elif "Carbs" in line:
+                nutrition_data["carbs"] = line.split(":")[1].strip()
+            elif "Fat" in line and "Total" not in line:
+                nutrition_data["fat"] = line.split(":")[1].strip()
+            elif "Total Fat" in line:
+                nutrition_data["detailed_nutrition"]["total_fat"] = line.split(":")[1].strip()
+            elif "Saturated Fat" in line:
+                nutrition_data["detailed_nutrition"]["saturated_fat"] = line.split(":")[1].strip()
+            elif "Trans Fat" in line:
+                nutrition_data["detailed_nutrition"]["trans_fat"] = line.split(":")[1].strip()
+
+        # Return the recommendation along with detailed nutrition data
+        return jsonify({
+            "recommendation": clean_output,
+            "nutrition": nutrition_data
+        })
 
     except Exception as e:
         # Handle exceptions and return an error message
