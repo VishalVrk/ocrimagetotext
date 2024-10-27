@@ -3,6 +3,7 @@ from gradio_client import Client, handle_file
 import requests
 from io import BytesIO
 from PIL import Image
+import re
 from flask_cors import CORS  # Import CORS
 
 app = Flask(__name__)
@@ -86,9 +87,9 @@ def perform_recomm():
     Ingredients:
     {ingredients}
 
-    Based on the provided ingredients, provide a nutritional breakdown including:
+    Based on the provided ingredients assume person is consuming 100gms or 1 serving, provide a nutritional breakdown including:
     - Total Calories
-    - Percentage of Protein, Carbohydrates, and Fat
+    - Percentage of Protein, Carbohydrates, and Fats
     - Total Fat in grams and percentage of daily value
     - Saturated Fat in grams and percentage of daily value
     - Trans Fat in grams
@@ -107,37 +108,47 @@ def perform_recomm():
         )
 
         # Clean and parse the bot output for structured nutrition data
-        clean_output = bot_result.replace("assistant", "").strip()
+        clean_output = bot_result.replace("assistant", "").replace("**","").strip()
 
-        # Initialize nutrition data structure
+  # Initialize nutrition data structure
         nutrition_data = {
-            "calories": None,
-            "protein": None,
-            "carbs": None,
-            "fat": None,
-            "detailed_nutrition": {
-                "total_fat": None,
-                "saturated_fat": None,
-                "trans_fat": None
-            }
+                    "calories": None,
+                    "protein": None,
+                    "carbs": None,
+                    "fat": None,
+                    "detailed_nutrition": {
+                        "total_fat": None,
+                        "saturated_fat": None,
+                        "trans_fat": None
+                    },
+                    "graph":{
+                        "protein": None,
+                        "carbs": None,
+                        "fat": None,
+                    }
         }
 
+        
         # Extract nutritional information from the bot's response
         for line in clean_output.splitlines():
             if "Calories" in line:
                 nutrition_data["calories"] = line.split(":")[1].strip()
             elif "Protein" in line:
                 nutrition_data["protein"] = line.split(":")[1].strip()
-            elif "Carbs" in line:
+                nutrition_data["graph"]["protein"]= nutrition_data["protein"][nutrition_data["protein"].find("(")+1:nutrition_data["protein"].find("%")]
+            elif "Carbohydrates" in line:
                 nutrition_data["carbs"] = line.split(":")[1].strip()
-            elif "Fat" in line and "Total" not in line:
-                nutrition_data["fat"] = line.split(":")[1].strip()
+                nutrition_data["graph"]["carbs"]= nutrition_data["carbs"][nutrition_data["carbs"].find("(")+1:nutrition_data["carbs"].find("%")]
             elif "Total Fat" in line:
+                nutrition_data["fat"] = line.split(":")[1].strip()
                 nutrition_data["detailed_nutrition"]["total_fat"] = line.split(":")[1].strip()
+                nutrition_data["graph"]["fat"]= nutrition_data["fat"][nutrition_data["fat"].find("(")+1:nutrition_data["fat"].find("%")]
             elif "Saturated Fat" in line:
                 nutrition_data["detailed_nutrition"]["saturated_fat"] = line.split(":")[1].strip()
             elif "Trans Fat" in line:
-                nutrition_data["detailed_nutrition"]["trans_fat"] = line.split(":")[1].strip()
+                nutrition_data["detailed_nutrition"]["trans_fat"] = line.split(":")[1].strip()  
+
+        
 
         # Return the recommendation along with detailed nutrition data
         return jsonify({
