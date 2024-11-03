@@ -11,7 +11,7 @@ CORS(app)
 
 # Initialize the Gradio clients
 ocr_client = Client("vrkforever/OCR-image-to-text")
-bot_client = Client("chuanli11/Chat-Llama-3.2-3B-Instruct-uncensored")
+bot_client = Client("vrkforever/Chat-Llama-3.2-3B-Instruct-uncensored")
 
 # Initialize in-memory log storage
 logs = []

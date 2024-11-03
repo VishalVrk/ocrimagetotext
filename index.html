@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application Logs</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        .log-container {
+            background-color: #1e1e1e;
+            color: #dcdcdc;
+            padding: 20px;
+            border-radius: 5px;
+            max-height: 80vh;
+            overflow-y: scroll;
+        }
+        .log-entry {
+            margin-bottom: 10px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+        }
+        .error {
+            color: #ff6347;
+        }
+    </style>
+</head>
+<body>
+    <h1>Application Logs</h1>
+    <div id="logs" class="log-container">
+        <!-- Logs will be displayed here -->
+    </div>
+
+    <script>
+        async function fetchLogs() {
+            try {
+                // Fetch logs from the server (update this endpoint if necessary)
+                const response = await fetch('https://ocrimagetotext-nsf8.onrender.com/api/logs');
+                
+                if (!response.ok) throw new Error("Failed to fetch logs");
+
+                const data = await response.json();
+
+                const logContainer = document.getElementById("logs");
+                logContainer.innerHTML = ''; // Clear previous logs
+
+                data.logs.forEach(log => {
+                    const logEntry = document.createElement("div");
+                    logEntry.classList.add("log-entry");
+
+                    if (log.type === "error") logEntry.classList.add("error");
+
+                    logEntry.textContent = `${log.timestamp} - ${log.message}`;
+                    logContainer.appendChild(logEntry);
+                });
+            } catch (error) {
+                console.error("Error fetching logs:", error);
+                document.getElementById("logs").innerHTML = `<div class="error">Error loading logs: ${error.message}</div>`;
+            }
+        }
+
+        // Fetch logs every 5 seconds
+        setInterval(fetchLogs, 5000);
+
+        // Initial fetch
+        fetchLogs();
+    </script>
+</body>
+</html>
