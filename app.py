@@ -81,6 +81,98 @@ def perform_ocr():
         error_msg = f"Failed to perform OCR: {str(e)}"
         add_log(error_msg, log_type="error")
         return jsonify({"error": error_msg}), 500
+    
+    # API route for performing recommendation
+@app.route('/api/recommend', methods=['POST'])
+def perform_recomm():
+    data = request.get_json()
+    print("Received recommendation request data:", data)
+    patient_data = data.get('patient')
+    ingredients = data.get('ingredients')
+    print("Patient data:", patient_data)
+    print("Ingredients:", ingredients)
+    if not patient_data or not ingredients:
+        print("Error: Missing patient data or ingredients")
+        return jsonify({"error": "Missing patient data or ingredients"}), 400
+    prompt = f"""
+    Patient Information:
+    - Age: {patient_data.get('age')}
+    - Allergies: {patient_data.get('allergies')}
+    - Health Conditions: {patient_data.get('healthConditions')}
+    - Sugar Level: {patient_data.get('sugarLevel')}
+    - Blood Pressure: {patient_data.get('bloodPressure')}
+    
+    Ingredients:
+    {ingredients}
+    Based on the provided ingredients assume person is consuming 100gms or 1 serving, provide a nutritional breakdown including:
+    - Total Calories
+    - Percentage of Protein, Carbohydrates, and Fats
+    - Total Fat in grams and percentage of daily value
+    - Saturated Fat in grams and percentage of daily value
+    - Trans Fat in grams
+        error_msg = f"Failed to perform OCR: {str(e)}"
+        add_log(error_msg, log_type="error")
+        return jsonify({"error": error_msg}), 500
+
+    Afterward, provide a recommendation on whether this food is safe for the patient to consume, considering their health profile.
+    """
+    print("Generated prompt for bot client:", prompt)
+    try:
+        bot_result = bot_client.predict(
+            message=prompt,
+            system_prompt=prompt,
+            max_new_tokens=1024,
+            temperature=0.6,
+            api_name="/chat"
+        )
+        print("Bot client result:", bot_result)
+        clean_output = bot_result.replace("assistant", "").replace("**","").strip()
+        print("Cleaned output:", clean_output)
+        # Initialize nutrition data structure
+        nutrition_data = {
+            "calories": None,
+            "protein": None,
+            "carbs": None,
+            "fat": None,
+            "detailed_nutrition": {
+                "total_fat": None,
+                "saturated_fat": None,
+                "trans_fat": None
+            },
+            "graph":{
+                "protein": None,
+                "carbs": None,
+                "fat": None,
+            }
+        }
+        # Extract nutritional information from the bot's response
+        for line in clean_output.splitlines():
+            print("Processing line:", line)
+            if "Calories" in line:
+                nutrition_data["calories"] = line.split(":")[1].strip()
+            elif "Protein" in line:
+                nutrition_data["protein"] = line.split(":")[1].strip()
+                nutrition_data["graph"]["protein"]= nutrition_data["protein"][nutrition_data["protein"].find("(")+1:nutrition_data["protein"].find("%")]
+            elif "Carbohydrates" in line:
+                nutrition_data["carbs"] = line.split(":")[1].strip()
+                nutrition_data["graph"]["carbs"]= nutrition_data["carbs"][nutrition_data["carbs"].find("(")+1:nutrition_data["carbs"].find("%")]
+            elif "Total Fat" in line:
+                nutrition_data["fat"] = line.split(":")[1].strip()
+                nutrition_data["detailed_nutrition"]["total_fat"] = line.split(":")[1].strip()
+                nutrition_data["graph"]["fat"]= nutrition_data["fat"][nutrition_data["fat"].find("(")+1:nutrition_data["fat"].find("%")]
+            elif "Saturated Fat" in line:
+                nutrition_data["detailed_nutrition"]["saturated_fat"] = line.split(":")[1].strip()
+            elif "Trans Fat" in line:
+                nutrition_data["detailed_nutrition"]["trans_fat"] = line.split(":")[1].strip()
+        print("Extracted nutrition data:", nutrition_data)
+        # Return the recommendation along with detailed nutrition data
+        return jsonify({
+            "recommendation": clean_output,
+            "nutrition": nutrition_data
+        })
+    except Exception as e:
+        print("Error performing recommendation:", e)
+        return jsonify({"error": "Failed to perform recommendation", "details": str(e)}), 500
 
 # API route for logs
 @app.route('/api/logs', methods=['GET'])
