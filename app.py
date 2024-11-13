@@ -11,7 +11,7 @@ CORS(app)
 
 # Initialize the Gradio clients
 ocr_client = Client("vrkforever/OCR-image-to-text")
-bot_client = Client("vrkforever/Chat-Llama-3.2-3B-Instruct-uncensored")
+bot_client = Client("Sadmanteemi/Chat-Llama-3.2-3B-Instruct-uncensored")
 
 # Initialize in-memory log storage
 logs = []
@@ -85,18 +85,17 @@ def perform_ocr():
 
 @app.route('/api/recommend', methods=['POST'])
 def perform_recomm():
-    # Get the JSON data from the request
     data = request.get_json()
-
-    # Extract patient data and ingredients from the received data
+    add_log(f"Received recommendation request data: {data}")
+    
     patient_data = data.get('patient')
     ingredients = data.get('ingredients')
+    add_log(f"Patient data: {patient_data}, Ingredients: {ingredients}")
 
-    # Check if both patient data and ingredients exist
     if not patient_data or not ingredients:
+        add_log("Error: Missing patient data or ingredients", log_type="error")
         return jsonify({"error": "Missing patient data or ingredients"}), 400
 
-    # Prepare the prompt for the recommendation with detailed nutrition information
     prompt = f"""
     Patient Information:
     - Age: {patient_data.get('age')}
@@ -115,9 +114,9 @@ def perform_recomm():
     - Trans Fat in grams
     Afterward, provide a recommendation on whether this food is safe for the patient to consume, considering their health profile.
     """
+    add_log(f"Generated prompt for bot client: {prompt}")
 
     try:
-        # Send the request to the bot client
         bot_result = bot_client.predict(
             message=prompt,
             system_prompt=prompt,
@@ -125,58 +124,57 @@ def perform_recomm():
             temperature=0.6,
             api_name="/chat"
         )
+        add_log(f"Bot client response: {bot_result}")
 
-        # Clean and parse the bot output for structured nutrition data
         clean_output = bot_result.replace("assistant", "").replace("**","").strip()
+        add_log(f"Cleaned output: {clean_output}")
 
-  # Initialize nutrition data structure
         nutrition_data = {
-                    "calories": None,
-                    "protein": None,
-                    "carbs": None,
-                    "fat": None,
-                    "detailed_nutrition": {
-                        "total_fat": None,
-                        "saturated_fat": None,
-                        "trans_fat": None
-                    },
-                    "graph":{
-                        "protein": None,
-                        "carbs": None,
-                        "fat": None,
-                    }
+            "calories": None,
+            "protein": None,
+            "carbs": None,
+            "fat": None,
+            "detailed_nutrition": {
+                "total_fat": None,
+                "saturated_fat": None,
+                "trans_fat": None
+            },
+            "graph": {
+                "protein": None,
+                "carbs": None,
+                "fat": None
+            }
         }
 
-        
-        # Extract nutritional information from the bot's response
         for line in clean_output.splitlines():
             if "Calories" in line:
                 nutrition_data["calories"] = line.split(":")[1].strip()
             elif "Protein" in line:
                 nutrition_data["protein"] = line.split(":")[1].strip()
-                nutrition_data["graph"]["protein"]= nutrition_data["protein"][nutrition_data["protein"].find("(")+1:nutrition_data["protein"].find("%")]
+                nutrition_data["graph"]["protein"] = nutrition_data["protein"][nutrition_data["protein"].find("(")+1:nutrition_data["protein"].find("%")]
             elif "Carbohydrates" in line:
                 nutrition_data["carbs"] = line.split(":")[1].strip()
-                nutrition_data["graph"]["carbs"]= nutrition_data["carbs"][nutrition_data["carbs"].find("(")+1:nutrition_data["carbs"].find("%")]
+                nutrition_data["graph"]["carbs"] = nutrition_data["carbs"][nutrition_data["carbs"].find("(")+1:nutrition_data["carbs"].find("%")]
             elif "Total Fat" in line:
                 nutrition_data["fat"] = line.split(":")[1].strip()
                 nutrition_data["detailed_nutrition"]["total_fat"] = line.split(":")[1].strip()
-                nutrition_data["graph"]["fat"]= nutrition_data["fat"][nutrition_data["fat"].find("(")+1:nutrition_data["fat"].find("%")]
+                nutrition_data["graph"]["fat"] = nutrition_data["fat"][nutrition_data["fat"].find("(")+1:nutrition_data["fat"].find("%")]
             elif "Saturated Fat" in line:
                 nutrition_data["detailed_nutrition"]["saturated_fat"] = line.split(":")[1].strip()
             elif "Trans Fat" in line:
-                nutrition_data["detailed_nutrition"]["trans_fat"] = line.split(":")[1].strip()  
-        
+                nutrition_data["detailed_nutrition"]["trans_fat"] = line.split(":")[1].strip()
 
-        # Return the recommendation along with detailed nutrition data
+        add_log(f"Parsed nutrition data: {nutrition_data}")
+
         return jsonify({
             "recommendation": clean_output,
             "nutrition": nutrition_data
         })
 
     except Exception as e:
-        # Handle exceptions and return an error message
-        return jsonify({"error": "Failed to perform recommendation", "details": str(e)}), 500
+        error_msg = f"Failed to perform recommendation: {str(e)}"
+        add_log(error_msg, log_type="error")
+        return jsonify({"error": error_msg}), 500
 
 # API route for logs
 @app.route('/api/logs', methods=['GET'])
