@@ -112,6 +112,7 @@ def perform_recomm():
     - Total Fat in grams and percentage of daily value
     - Saturated Fat in grams and percentage of daily value
     - Trans Fat in grams
+    - Any Ammino acids or Acid Content
     Afterward, provide a recommendation on whether this food is safe for the patient to consume, considering their health profile.
     """
     add_log(f"Generated prompt for bot client: {prompt}")
@@ -155,7 +156,7 @@ def perform_recomm():
             elif "Carbohydrates" in line:
                 nutrition_data["carbs"] = line.split(":")[1].strip()
                 nutrition_data["graph"]["carbs"] = nutrition_data["carbs"][nutrition_data["carbs"].find("(")+1:nutrition_data["carbs"].find("%")]
-            elif "Fat:" in line:
+            elif "Total Fat:" in line:
                 nutrition_data["fat"] = line.split(":")[1].strip()
                 nutrition_data["detailed_nutrition"]["total_fat"] = line.split(":")[1].strip()
                 nutrition_data["graph"]["fat"] = nutrition_data["fat"][nutrition_data["fat"].find("(")+1:nutrition_data["fat"].find("%")]
