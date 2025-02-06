@@ -1,17 +1,11 @@
 from flask import Flask, request, jsonify
-from gradio_client import Client, handle_file
 import requests
-from io import BytesIO
-from PIL import Image
+import json
 from datetime import datetime
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
-
-# Initialize the Gradio clients
-ocr_client = Client("vrkforever/OCR-image-to-text")
-bot_client = Client("vrkforever/Chat-Llama-3.2-3B-Instruct-uncensored")
 
 # Initialize in-memory log storage
 logs = []
@@ -25,6 +19,14 @@ def add_log(message, log_type="info"):
     }
     logs.append(log_entry)
     print(log_entry)  # Print to console for debugging
+
+# AIML API Configuration
+AIML_API_URL = "https://api.aimlapi.com/chat/completions"
+AIML_API_KEY = "6cb41c23403144868c5befe28e649fc4"
+HEADERS = {
+    'Content-Type': 'application/json',
+    'Authorization': f'Bearer {AIML_API_KEY}'
+}
 
 # API route for performing OCR
 @app.route('/api/ocr', methods=['POST'])
@@ -41,50 +43,40 @@ def perform_ocr():
         return jsonify({"error": "Image URL is required."}), 400
 
     try:
-        response = requests.get(image_url)
-        add_log(f"Image fetch response status code: {response.status_code}")
-
-        if response.status_code != 200:
-            error_msg = "Error: Failed to fetch image from URL"
-            add_log(error_msg, log_type="error")
-            return jsonify({"error": error_msg}), 400
-
-        img_data = BytesIO(response.content)
-        img = Image.open(img_data)
-        img.save("temp_image.png")
-        add_log("Image successfully saved as temp_image.png")
-
-        result = ocr_client.predict(
-            Method="PaddleOCR",
-            img=handle_file("temp_image.png"),
-            api_name="/predict"
-        )
-        add_log(f"OCR result: {result}")
-
-        bot_result = bot_client.predict(
-            message=f"{result} \n based on the given value keep only ingredients. If no ingredients are found, say 'No Ingredients found'",
-            system_prompt=f"{result} \n based on the given value keep only ingredients. If no ingredients are found, say 'No Ingredients found'",
-            max_new_tokens=1024,
-            temperature=0.6,
-            api_name="/chat"
-        )
-        add_log(f"Bot client result: {bot_result}")
-
-        clean_output = bot_result.replace("assistant", "").strip()
-        ingredients_list = clean_output.split("\n")
-        ingredients_list = [ingredient.split(". ", 1)[1] if ". " in ingredient else ingredient for ingredient in ingredients_list]
-        add_log(f"Extracted ingredients list: {ingredients_list}")
-
-        return jsonify(ingredients_list)
-
+        payload = json.dumps({
+            "model": "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Extract text from this image, do not need any explanations just give ingredients"},
+                        {"type": "image_url", "image_url": {"url": image_url}}
+                    ]
+                }
+            ],
+            "max_tokens": 300
+        })
+        
+        response = requests.post(AIML_API_URL, headers=HEADERS, data=payload)
+        add_log(f"OCR API response: {response.status_code}")
+        
+        if response.status_code != 201:
+            return jsonify({"error": "Failed to process OCR."}), 500
+        
+        result = response.json()
+        extracted_text = result.get("choices", [{}])[0].get("message", {}).get("content", "No text found")
+        add_log(f"OCR result: {extracted_text}")
+        cleaned_text = extracted_text.replace('*', '')
+        return jsonify({"text": cleaned_text})
+    
     except Exception as e:
         error_msg = f"Failed to perform OCR: {str(e)}"
         add_log(error_msg, log_type="error")
         return jsonify({"error": error_msg}), 500
 
-
+# API route for performing recommendation
 @app.route('/api/recommend', methods=['POST'])
-def perform_recomm():
+def perform_recommend():
     data = request.get_json()
     add_log(f"Received recommendation request data: {data}")
     
@@ -115,61 +107,72 @@ def perform_recomm():
     - Any Ammino acids or Acid Content or Organic Acids
     Afterward, provide a recommendation on whether this food is safe for the patient to consume, considering their health profile.
     """
-    add_log(f"Generated prompt for bot client: {prompt}")
+    add_log(f"Generated prompt for AIML API: {prompt}")
 
     try:
-        bot_result = bot_client.predict(
-            message=prompt,
-            system_prompt=prompt,
-            max_new_tokens=1024,
-            temperature=0.6,
-            api_name="/chat"
-        )
-        add_log(f"Bot client response: {bot_result}")
+        payload = json.dumps({
+            "model": "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 1024
+        })
 
-        clean_output = bot_result.replace("assistant", "").replace("**","").strip()
-        add_log(f"Cleaned output: {clean_output}")
+        response = requests.post(AIML_API_URL, headers=HEADERS, data=payload)
+        add_log(f"Recommendation API response: {response.status_code}")
 
-        nutrition_data = {
-            "calories": None,
-            "protein": None,
-            "carbs": None,
-            "fat": None,
-            "detailed_nutrition": {
-                "total_fat": None,
-                "saturated_fat": None,
-                "trans_fat": None
-            },
-            "graph": {
-                "protein": None,
-                "carbs": None,
-                "fat": None
+        if response.status_code != 201:
+            return jsonify({"error": "Failed to process recommendation."}), 500
+
+        result = response.json()
+        recommendation = result.get("choices", [{}])[0].get("message", {}).get("content", "No recommendation available")
+        add_log(f"Recommendation result: {recommendation.replace('*', '')}")
+        print(recommendation)
+
+        p2 = """
+            Extract the following nutritional values from the given text and provide single representative values in JSON format:
+
+            {
+                "calories": <single average value in kcal>,
+                "protein": <single average value in grams>,
+                "carbs": <single average value in grams>,
+                "fat": <single average value in grams>,
+                "detailed_nutrition": {
+                    "total_fat": <single average value in grams>,
+                    "saturated_fat": <single average value in grams>,
+                    "trans_fat": <single average value in grams>
+                },
+                "graph": {
+                    "protein": <single average value in percentage>,
+                    "carbs": <single average value in percentage>,
+                    "fat": <single average value in percentage>
+                }
             }
-        }
 
-        for line in clean_output.splitlines():
-            if "Calories" in line:
-                nutrition_data["calories"] = line.split(":")[1].strip()
-            elif "Protein" in line:
-                nutrition_data["protein"] = line.split(":")[1].strip()
-                nutrition_data["graph"]["protein"] = nutrition_data["protein"][nutrition_data["protein"].find("(")+1:nutrition_data["protein"].find("%")]
-            elif "Carbohydrates" in line:
-                nutrition_data["carbs"] = line.split(":")[1].strip()
-                nutrition_data["graph"]["carbs"] = nutrition_data["carbs"][nutrition_data["carbs"].find("(")+1:nutrition_data["carbs"].find("%")]
-            elif "Fat:" in line:
-                nutrition_data["fat"] = line.split(":")[1].strip()
-                nutrition_data["detailed_nutrition"]["total_fat"] = line.split(":")[1].strip()
-                nutrition_data["graph"]["fat"] = nutrition_data["fat"][nutrition_data["fat"].find("(")+1:nutrition_data["fat"].find("%")]
-            elif "Saturated Fat" in line:
-                nutrition_data["detailed_nutrition"]["saturated_fat"] = line.split(":")[1].strip()
-            elif "Trans Fat" in line:
-                nutrition_data["detailed_nutrition"]["trans_fat"] = line.split(":")[1].strip()
+            Ensure that the extracted values are accurate and formatted correctly as JSON.
+            """  + recommendation
+        
+        pay2 = json.dumps({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": p2}],
+            "max_tokens": 1024
+        })
 
-        add_log(f"Parsed nutrition data: {nutrition_data}")
+        response = requests.post(AIML_API_URL, headers=HEADERS, data=pay2)
+        add_log(f"Recommendation API response: {response.status_code}")
+
+        if response.status_code != 201:
+            return jsonify({"error": "Failed to process recommendation."}), 500
+        
+        result = response.json()
+        nutrition_data = result.get("choices", [{}])[0].get("message", {}).get("content", "No recommendation available")
+        add_log(f"nutrition_data result: {nutrition_data}")
+        nutrition=nutrition_data.replace('*', '').replace("```", '').replace("json",'')
+        nutrition_json = json.loads(nutrition)
+        print(nutrition_json)
+        add_log(f"Parsed nutrition data: {nutrition_json}")
 
         return jsonify({
-            "recommendation": clean_output,
-            "nutrition": nutrition_data
+            "recommendation": recommendation.replace('*', ''),
+            "nutrition": nutrition_json
         })
 
     except Exception as e:
