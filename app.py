@@ -147,7 +147,7 @@ def perform_recommend():
                 }
             }
 
-            Ensure that the extracted values are accurate and formatted correctly as JSON.
+            Ensure that the extracted values are accurate and formatted correctly as JSON, no need any extra information, only json is enough.
             """  + recommendation
         
         pay2 = json.dumps({
