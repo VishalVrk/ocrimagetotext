@@ -21,8 +21,8 @@ def add_log(message, log_type="info"):
     print(log_entry)  # Print to console for debugging
 
 # AIML API Configuration
-AIML_API_URL = "https://api.aimlapi.com/chat/completions"
-AIML_API_KEY = "6cb41c23403144868c5befe28e649fc4"
+AIML_API_URL = "https://api.together.xyz/v1/chat/completions"
+AIML_API_KEY = "f6d3a4ca6990e78d553a9fe773999e37f232a5726a3e5fdeae42a0032d934487"
 HEADERS = {
     'Content-Type': 'application/json',
     'Authorization': f'Bearer {AIML_API_KEY}'
@@ -44,7 +44,7 @@ def perform_ocr():
 
     try:
         payload = json.dumps({
-            "model": "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
+            "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             "messages": [
                 {
                     "role": "user",
