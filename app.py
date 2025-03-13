@@ -58,9 +58,11 @@ def perform_ocr():
         })
         
         response = requests.post(AIML_API_URL, headers=HEADERS, data=payload)
+        print(response.json())
         add_log(f"OCR API response: {response.status_code}")
         
         if response.status_code != 201:
+            add_log(f"OCR API response: {response.json()}")
             return jsonify({"error": "Failed to process OCR."}), 500
         
         result = response.json()
