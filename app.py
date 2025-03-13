@@ -3,6 +3,7 @@ import requests
 import json
 from datetime import datetime
 from flask_cors import CORS
+from gradio_client import Client, handle_file
 
 app = Flask(__name__)
 CORS(app)
@@ -21,12 +22,13 @@ def add_log(message, log_type="info"):
     print(log_entry)  # Print to console for debugging
 
 # AIML API Configuration
-AIML_API_URL = "https://api.aimlapi.com/chat/completions"
-AIML_API_KEY = "6cb41c23403144868c5befe28e649fc4"
+AIML_API_URL = "https://api.together.xyz/v1/chat/completions"
+AIML_API_KEY = "f6d3a4ca6990e78d553a9fe773999e37f232a5726a3e5fdeae42a0032d934487"
 HEADERS = {
     'Content-Type': 'application/json',
     'Authorization': f'Bearer {AIML_API_KEY}'
 }
+client = Client("gizemsarsinlar/SmolVLM-Artwork-Analysis")
 
 # API route for performing OCR
 @app.route('/api/ocr', methods=['POST'])
@@ -43,32 +45,38 @@ def perform_ocr():
         return jsonify({"error": "Image URL is required."}), 400
 
     try:
-        payload = json.dumps({
-            "model": "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Extract text from this image, do not need any explanations just give ingredients"},
-                        {"type": "image_url", "image_url": {"url": image_url}}
-                    ]
-                }
-            ],
-            "max_tokens": 300
-        })
+        # payload = json.dumps({
+        #     "model": "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
+        #     "messages": [
+        #         {
+        #             "role": "user",
+        #             "content": [
+        #                 {"type": "text", "text": "Extract text from this image, do not need any explanations just give ingredients"},
+        #                 {"type": "image_url", "image_url": {"url": image_url}}
+        #             ]
+        #         }
+        #     ],
+        #     "max_tokens": 300
+        # })
         
-        response = requests.post(AIML_API_URL, headers=HEADERS, data=payload)
-        print(response.json())
-        add_log(f"OCR API response: {response.status_code}")
+        # response = requests.post(AIML_API_URL, headers=HEADERS, data=payload)
+        # print(response.json())
+        result = client.predict(
+		images=handle_file(image_url),
+		text="Extract text from this image, do not need any explanations just give ingredients",
+		api_name="/model_inference"
+        )
+        print(result)
+        add_log(f"OCR API response: {result}")
         
-        if response.status_code != 201:
-            add_log(f"OCR API response: {response.json()}")
-            return jsonify({"error": "Failed to process OCR."}), 500
+        # if response.status_code != 201:
+        #     add_log(f"OCR API response: {response.json()}")
+        #     return jsonify({"error": "Failed to process OCR."}), 500
         
-        result = response.json()
-        extracted_text = result.get("choices", [{}])[0].get("message", {}).get("content", "No text found")
-        add_log(f"OCR result: {extracted_text}")
-        cleaned_text = extracted_text.replace('*', '')
+        # result = response.json()
+        # extracted_text = result.get("choices", [{}])[0].get("message", {}).get("content", "No text found")
+        # add_log(f"OCR result: {extracted_text}")
+        cleaned_text = result.replace('*', '')
         return jsonify({"text": cleaned_text})
     
     except Exception as e:
@@ -113,16 +121,17 @@ def perform_recommend():
 
     try:
         payload = json.dumps({
-            "model": "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
+            "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 1024
         })
 
         response = requests.post(AIML_API_URL, headers=HEADERS, data=payload)
         add_log(f"Recommendation API response: {response.status_code}")
+        add_log(f"Recommendation API response: {response.json()}")
 
-        if response.status_code != 201:
-            return jsonify({"error": "Failed to process recommendation."}), 500
+        if response.status_code != 200:
+            return jsonify({"error": f"Failed to process recommendation. {response.json()}"}), 500
 
         result = response.json()
         recommendation = result.get("choices", [{}])[0].get("message", {}).get("content", "No recommendation available")
@@ -153,16 +162,17 @@ def perform_recommend():
             """  + recommendation
         
         pay2 = json.dumps({
-            "model": "gpt-4o",
+            "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             "messages": [{"role": "user", "content": p2}],
             "max_tokens": 1024
         })
 
         response = requests.post(AIML_API_URL, headers=HEADERS, data=pay2)
         add_log(f"Recommendation API response: {response.status_code}")
+        add_log(f"Recommendation API response: {response.json()}")
 
-        if response.status_code != 201:
-            return jsonify({"error": "Failed to process recommendation."}), 500
+        if response.status_code != 200:
+            return jsonify({"error": f"Failed to process recommendation. {response.json()}"}), 500
         
         result = response.json()
         nutrition_data = result.get("choices", [{}])[0].get("message", {}).get("content", "No recommendation available")
